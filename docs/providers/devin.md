@@ -59,10 +59,10 @@ appear in CLI/UI results until configured.
 
 ## Storage format
 
-CodeBurn supports ATIF transcript variants used by Devin across **ATIF-v1.5**, **ATIF-v1.6**, and **ATIF-v1.7** (and remains backward-compatible with older Devin transcripts that still use v1.4-style field names).
-
-The parser does not hard-fail on `schema_version`; it parses any object root
-with a `steps[]` array.
+Observed [ATIF trajectory schema][atif] variants used by Devin are **ATIF-v1.4** and **ATIF-v1.7**.
+The parser does not validate `schema_version`; it only requires a parseable object with `steps[]` array.
+Supports Devin-specific additions such as per-step `metadata`.
+Core fields include `session_id`, `agent.model_name`, and `steps[]`.
 
 ### Field normalization
 
