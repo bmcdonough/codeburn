@@ -22,11 +22,20 @@ type AgentTrajectory<T extends Step> = {
   steps: T[];
 };
 
+type ToolDefinition = {
+  type?: string;
+  function?: {
+    name?: string;
+    description?: string;
+    parameters?: unknown;
+  };
+};
+
 type Agent = {
-  name?: string;
-  version?: string;
+  name: string;
+  version: string;
   model_name?: string;
-  tool_definitions?: unknown;
+  tool_definitions?: ToolDefinition[];
 };
 
 type ToolCall = {
@@ -305,13 +314,40 @@ function getModelName(
   );
 }
 
-function getToolNames(step: DevinStep): string[] {
+function getDeclaredToolNames(
+  transcript: DevinAgentTrajectory,
+): Map<string, string> {
+  const declaredToolNames = new Map<string, string>();
+  const definitions = Array.isArray(transcript.agent?.tool_definitions)
+    ? transcript.agent.tool_definitions
+    : [];
+
+  for (const definition of definitions) {
+    if (!definition || typeof definition !== "object") continue;
+    const toolName = definition.function?.name?.trim();
+    if (!toolName) continue;
+    declaredToolNames.set(toolName.toLowerCase(), toolName);
+  }
+
+  return declaredToolNames;
+}
+
+function getToolNames(
+  step: DevinStep,
+  declaredToolNames: Map<string, string>,
+): string[] {
   const tools: string[] = [];
   const toolCalls = Array.isArray(step.tool_calls) ? step.tool_calls : [];
+
   for (const call of toolCalls) {
-    const toolName = call.function_name ?? call.function?.name;
-    if (toolName) tools.push(toolName);
+    const rawToolName = (call.function_name ?? call.function?.name)?.trim();
+    if (!rawToolName) continue;
+
+    const canonicalToolName =
+      declaredToolNames.get(rawToolName.toLowerCase()) ?? rawToolName;
+    tools.push(canonicalToolName);
   }
+
   return tools;
 }
 
@@ -394,6 +430,7 @@ class DevinSessionParser implements SessionParser {
     const projectPath = getProjectPath(session);
     const costFactor = await getCostFactor();
     if (costFactor === null) return;
+    const declaredToolNames = getDeclaredToolNames(transcript);
 
     for (let index = 0; index < transcript.steps.length; index++) {
       const step = transcript.steps[index];
@@ -411,7 +448,7 @@ class DevinSessionParser implements SessionParser {
       this.seenKeys.add(deduplicationKey);
 
       const model = getModelName(transcript, step, session);
-      const tools = getToolNames(step);
+      const tools = getToolNames(step, declaredToolNames);
       const userMessage =
         getFirstUserMessageBeforeStep(transcript.steps, index) ?? "";
 
